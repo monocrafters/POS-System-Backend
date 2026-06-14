@@ -65,6 +65,26 @@ async function seedDefaultUsers(): Promise<void> {
 export async function ensureDatabaseReady(): Promise<void> {
     if (!bootstrapPromise) {
         bootstrapPromise = (async () => {
+            const dbUrl = process.env.DATABASE_URL || "";
+            if (dbUrl.startsWith("file:/tmp/")) {
+                const targetPath = dbUrl.replace("file:", "");
+                const fs = await import("fs");
+                if (!fs.existsSync(targetPath)) {
+                    const path = await import("path");
+                    const candidates = [
+                        path.join(process.cwd(), "prisma", "prisma", "pos.db"),
+                        path.join(process.cwd(), "prisma", "pos.db"),
+                    ];
+                    const srcPath = candidates.find(p => fs.existsSync(p));
+                    if (srcPath) {
+                        fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+                        fs.copyFileSync(srcPath, targetPath);
+                        console.log(`[bootstrap-db] Copied template DB from ${srcPath} to ${targetPath}`);
+                    } else {
+                        console.error("[bootstrap-db] Template DB not found in candidates:", candidates);
+                    }
+                }
+            }
             await ensureSqliteSchemaInDev();
             await ensureShopSettingsRow();
             await prisma.productBarcode.deleteMany({
