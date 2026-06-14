@@ -2,11 +2,8 @@ import path from "path";
 import { prisma } from "@/lib/prisma";
 import { hashPassword } from "@/lib/auth/password";
 import { ensureShopSettingsRow } from "@/lib/shop-settings";
-import { isMongoConfigured } from "@/lib/mongodb";
-import { runInitialPullFromMongo } from "@/lib/sync/sync-service";
 
 let bootstrapPromise: Promise<void> | null = null;
-let mongoPullPromise: Promise<void> | null = null;
 
 function isVercelRuntime(): boolean {
     return Boolean(process.env.VERCEL);
@@ -73,36 +70,42 @@ async function pushSqliteSchema(): Promise<void> {
     }
 }
 
-export async function ensureSqliteSchema(): Promise<void> {
-    if (await isSchemaCurrent()) {
-        return;
-    }
+/** Desktop only — auto-migrate local SQLite when schema columns are missing. */
+async function ensureDesktopSqliteSchema(): Promise<void> {
+    if (isVercelRuntime()) return;
+    if (await isSchemaCurrent()) return;
     console.log("[bootstrap-db] Schema out of date — running prisma db push");
     await pushSqliteSchema();
-    if (!(await isSchemaCurrent())) {
-        throw new Error("Database schema could not be updated. Run `npm run db:push` and restart.");
-    }
 }
 
 async function ensureVercelDatabaseFile(): Promise<void> {
     const dbUrl = process.env.DATABASE_URL || "";
-    if (!dbUrl.startsWith("file:/tmp/")) {
-        return;
-    }
+    if (!dbUrl.startsWith("file:/tmp/")) return;
+
     const fs = await import("fs");
     const targetPath = dbUrl.replace("file:", "");
+
     if (fs.existsSync(targetPath)) {
-        return;
+        try {
+            await prisma.user.count();
+            return;
+        }
+        catch {
+            fs.unlinkSync(targetPath);
+        }
     }
+
     const srcPath = getTemplateDbCandidates().find((candidate) => fs.existsSync(candidate));
     fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+
     if (srcPath) {
         fs.copyFileSync(srcPath, targetPath);
         console.log(`[bootstrap-db] Copied template DB from ${srcPath} to ${targetPath}`);
         return;
     }
-    console.warn("[bootstrap-db] Template DB not found; creating schema on Vercel /tmp database");
-    await pushSqliteSchema();
+
+    console.error("[bootstrap-db] Template DB not found at:", getTemplateDbCandidates());
+    throw new Error("Server database template missing on Vercel. Redeploy required.");
 }
 
 async function seedDefaultUsers(): Promise<void> {
@@ -138,35 +141,19 @@ async function seedDefaultUsers(): Promise<void> {
     }
 }
 
-/** Pull latest MongoDB backup into SQLite — never blocks login/API responses. */
-export function pullMongoBackupInBackground(): void {
-    if (!isMongoConfigured()) return;
-    if (mongoPullPromise) return;
-    mongoPullPromise = (async () => {
-        try {
-            await runInitialPullFromMongo();
-        }
-        catch (error) {
-            console.warn("[bootstrap-db] Mongo backup pull skipped:", error);
-        }
-    })().finally(() => {
-        mongoPullPromise = null;
-    });
-}
-
 export async function ensureDatabaseReady(): Promise<void> {
-    await ensureSqliteSchema();
-
     if (!bootstrapPromise) {
         bootstrapPromise = (async () => {
             if (isVercelRuntime()) {
                 await ensureVercelDatabaseFile();
             }
-            await ensureSqliteSchema();
+            else {
+                await ensureDesktopSqliteSchema();
+            }
             await ensureShopSettingsRow();
             await prisma.productBarcode.deleteMany({
                 where: { product: { isActive: false } },
-            });
+            }).catch(() => null);
 
             const userCount = await prisma.user.count();
             if (userCount === 0) {
@@ -177,7 +164,5 @@ export async function ensureDatabaseReady(): Promise<void> {
             throw err;
         });
     }
-
     await bootstrapPromise;
-    pullMongoBackupInBackground();
 }
