@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bata POS — Barcode Scanner</title>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: system-ui, -apple-system, Segoe UI, sans-serif;
+        background: #0f0f0f;
+        color: #fff;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+      header {
+        width: 100%;
+        max-width: 520px;
+        padding: 20px 16px 8px;
+        text-align: center;
+      }
+      header h1 {
+        margin: 0;
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: #e11d48;
+      }
+      header p {
+        margin: 8px 0 0;
+        font-size: 0.85rem;
+        color: #a3a3a3;
+      }
+      #reader-wrap {
+        position: relative;
+        width: 100%;
+        max-width: 520px;
+      }
+      #reader {
+        width: 100%;
+      }
+      #reader video {
+        border-radius: 16px;
+      }
+      #reader.hidden {
+        visibility: hidden;
+        height: 0;
+        overflow: hidden;
+      }
+      .overlay {
+        display: none;
+        width: 100%;
+        max-width: 520px;
+        padding: 16px;
+      }
+      .overlay.show {
+        display: block;
+      }
+      .overlay-card {
+        background: #1a1a1a;
+        border: 1px solid #22c55e;
+        border-radius: 20px;
+        padding: 24px 20px;
+        text-align: center;
+      }
+      .overlay-card .code {
+        font-size: 1.5rem;
+        font-weight: 800;
+        color: #86efac;
+        word-break: break-all;
+        margin: 12px 0 20px;
+      }
+      .overlay-card p {
+        margin: 0 0 16px;
+        color: #a3a3a3;
+        font-size: 0.9rem;
+      }
+      .btn-row {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .btn {
+        width: 100%;
+        padding: 16px 20px;
+        border: none;
+        border-radius: 14px;
+        font-size: 1rem;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      .btn-primary {
+        background: #e11d48;
+        color: #fff;
+      }
+      .btn-secondary {
+        background: #262626;
+        color: #fafafa;
+        border: 2px solid #404040;
+      }
+      .btn-next {
+        background: #22c55e;
+        color: #0f0f0f;
+        display: none;
+      }
+      .btn-next.show {
+        display: block;
+      }
+      .status {
+        margin-top: 16px;
+        padding: 12px 20px;
+        border-radius: 12px;
+        background: #1a1a1a;
+        font-size: 0.9rem;
+        max-width: 520px;
+        width: calc(100% - 32px);
+        text-align: center;
+      }
+      .status.ok {
+        border: 1px solid #22c55e;
+        color: #86efac;
+      }
+      .status.err {
+        border: 1px solid #ef4444;
+        color: #fca5a5;
+      }
+      .controls {
+        display: flex;
+        justify-content: center;
+        width: 100%;
+        max-width: 520px;
+        padding: 12px 16px 0;
+      }
+      .torch-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        min-width: 200px;
+        padding: 14px 24px;
+        border: 2px solid #404040;
+        border-radius: 14px;
+        background: #262626;
+        color: #fafafa;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .torch-btn.on {
+        background: #facc15;
+        border-color: #eab308;
+        color: #171717;
+      }
+      .torch-btn:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Bata POS Scanner</h1>
+      <p>Scan → confirm → scan next item for cashier cart</p>
+      <p id="urls" style="font-size:0.75rem;color:#737373;margin-top:6px"></p>
+    </header>
+
+    <div id="reader-wrap">
+      <div id="reader"></div>
+      <div id="scanOverlay" class="overlay">
+        <div class="overlay-card">
+          <p>✓ Sent to cashier cart</p>
+          <div class="code" id="scannedCode"></div>
+          <div class="btn-row">
+            <button type="button" id="btnScanAnother" class="btn btn-primary">
+              Scan another
+            </button>
+            <button type="button" id="btnNext" class="btn btn-next">
+              Next — ready for new item
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button type="button" id="torchBtn" class="torch-btn" disabled>
+        <span aria-hidden="true">🔦</span>
+        <span id="torchLabel">Flash</span>
+      </button>
+    </div>
+    <div id="status" class="status">Starting camera…</div>
+
+    <script>
+      const statusEl = document.getElementById("status");
+      const overlay = document.getElementById("scanOverlay");
+      const readerEl = document.getElementById("reader");
+      const scannedCodeEl = document.getElementById("scannedCode");
+      const btnScanAnother = document.getElementById("btnScanAnother");
+      const btnNext = document.getElementById("btnNext");
+      const torchBtn = document.getElementById("torchBtn");
+      const torchLabel = document.getElementById("torchLabel");
+
+      let ws = null;
+      let lastCode = "";
+      let lastAt = 0;
+      let torchOn = false;
+      let torchSupported = false;
+      let scanLocked = false;
+      let awaitingNext = false;
+      const COOLDOWN_MS = 1200;
+
+      const scanner = new Html5Qrcode("reader");
+
+      function setStatus(text, ok) {
+        statusEl.textContent = text;
+        statusEl.className = "status " + (ok ? "ok" : "err");
+      }
+
+      function getVideoTrack() {
+        const video = document.querySelector("#reader video");
+        if (!video || !video.srcObject) return null;
+        const tracks = video.srcObject.getVideoTracks();
+        return tracks.length ? tracks[0] : null;
+      }
+
+      async function applyTorch(on) {
+        const track = getVideoTrack();
+        if (!track) throw new Error("No camera");
+        if (track.getCapabilities?.().torch === true) {
+          await track.applyConstraints({ advanced: [{ torch: on }] });
+          return;
+        }
+        if (typeof scanner.applyVideoConstraints === "function") {
+          await scanner.applyVideoConstraints({ advanced: [{ torch: on }] });
+        }
+      }
+
+      async function initTorch() {
+        await new Promise((r) => setTimeout(r, 400));
+        const track = getVideoTrack();
+        if (!track) {
+          torchLabel.textContent = "Flash N/A";
+          return;
+        }
+        const caps = track.getCapabilities?.() || {};
+        torchSupported = caps.torch === true;
+        torchBtn.disabled = !torchSupported;
+        torchLabel.textContent = torchSupported ? "Flash OFF" : "Not supported";
+      }
+
+      torchBtn.addEventListener("click", async () => {
+        if (!torchSupported) return;
+        try {
+          torchOn = !torchOn;
+          await applyTorch(torchOn);
+          torchBtn.classList.toggle("on", torchOn);
+          torchLabel.textContent = torchOn ? "Flash ON" : "Flash OFF";
+        } catch (e) {
+          console.warn(e);
+        }
+      });
+
+      function connectWs() {
+        ws = new WebSocket(
+          (location.protocol === "https:" ? "wss:" : "ws:") +
+            "//" +
+            location.host
+        );
+        ws.onclose = () => setTimeout(connectWs, 2000);
+        ws.onerror = () => ws && ws.close();
+      }
+      connectWs();
+
+      async function relayScan(code) {
+        const payload = JSON.stringify({ type: "scan", barcode: code });
+        if (ws && ws.readyState === WebSocket.OPEN) ws.send(payload);
+        await fetch("/api/scan", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ barcode: code }),
+        });
+      }
+
+      function showScannedUI(code) {
+        scannedCodeEl.textContent = code;
+        overlay.classList.add("show");
+        readerEl.classList.add("hidden");
+        btnNext.classList.remove("show");
+        awaitingNext = false;
+        setStatus("Added to POS — tap Scan another", true);
+      }
+
+      async function pauseCamera() {
+        try {
+          await scanner.pause(true);
+        } catch (e) {
+          console.warn("pause", e);
+        }
+      }
+
+      async function resumeCamera() {
+        try {
+          await scanner.resume();
+          readerEl.classList.remove("hidden");
+          overlay.classList.remove("show");
+        } catch (e) {
+          console.warn("resume", e);
+        }
+      }
+
+      async function onDecoded(code) {
+        if (scanLocked) return;
+        const now = Date.now();
+        if (code === lastCode && now - lastAt < COOLDOWN_MS) return;
+        lastCode = code;
+        lastAt = now;
+        scanLocked = true;
+
+        await pauseCamera();
+        try {
+          await relayScan(code);
+          showScannedUI(code);
+        } catch (e) {
+          setStatus("Failed to send scan", false);
+          scanLocked = false;
+          await resumeCamera();
+        }
+      }
+
+      btnScanAnother.addEventListener("click", async () => {
+        btnNext.classList.add("show");
+        awaitingNext = true;
+        scanLocked = false;
+        setStatus("Point camera at next barcode", true);
+        await resumeCamera();
+      });
+
+      btnNext.addEventListener("click", async () => {
+        btnNext.classList.remove("show");
+        awaitingNext = false;
+        scanLocked = false;
+        lastCode = "";
+        setStatus("Ready — scan next product", true);
+        await resumeCamera();
+      });
+
+      fetch("/api/info")
+        .then((r) => r.json())
+        .then((info) => {
+          if (info.urls?.length) {
+            document.getElementById("urls").textContent =
+              "Phone: " +
+              info.urls.filter((u) => !u.includes("127.0.0.1")).join(" · ");
+          }
+        })
+        .catch(() => {});
+
+      Html5Qrcode.getCameras()
+        .then((cameras) => {
+          if (!cameras?.length) {
+            setStatus("No camera found", false);
+            return;
+          }
+          const cam =
+            cameras.find((c) => /back|rear|environment/i.test(c.label)) ||
+            cameras[cameras.length - 1];
+          const formats = [
+            Html5QrcodeSupportedFormats.EAN_13,
+            Html5QrcodeSupportedFormats.EAN_8,
+            Html5QrcodeSupportedFormats.UPC_A,
+            Html5QrcodeSupportedFormats.UPC_E,
+            Html5QrcodeSupportedFormats.CODE_128,
+            Html5QrcodeSupportedFormats.CODE_39,
+            Html5QrcodeSupportedFormats.QR_CODE,
+          ];
+          return scanner
+            .start(
+              cam.id,
+              { fps: 10, qrbox: { width: 300, height: 120 }, formatsToSupport: formats },
+              (decoded) => onDecoded(decoded),
+              () => {}
+            )
+            .then(() => {
+              initTorch();
+              setStatus("Camera ready — scan a barcode", true);
+            });
+        })
+        .catch((err) => setStatus("Camera error: " + (err.message || err), false));
+    </script>
+  </body>
+</html>

@@ -1,0 +1,142 @@
+{
+  "name": "pos-desktop",
+  "version": "0.1.0",
+  "description": "Professional Desktop POS Software",
+  "private": true,
+  "main": "dist-electron/main.js",
+  "author": "POS Team",
+  "scripts": {
+    "dev": "npm run compile:electron && concurrently -k -n \"NEXT,ELECTRON,SCANNER\" -c \"cyan,magenta,yellow\" \"npm run dev:next\" \"npm run dev:electron\" \"npm run dev:scanner\"",
+    "dev:scanner:free": "node scripts/free-scanner-port.mjs",
+    "dev:scanner": "node scripts/free-scanner-port.mjs && node scripts/scanner-server.mjs",
+    "dev:next": "cross-env BROWSER=none NODE_ENV=development next dev -H 0.0.0.0 -p 3000",
+    "dev:electron": "wait-on http-get://127.0.0.1:3000/api/health && cross-env NODE_ENV=development electron .",
+    "compile:electron": "tsc -p tsconfig.electron.json",
+    "prepare-app-data": "node scripts/prepare-app-data.mjs",
+    "build": "npm run compile:electron && cross-env NODE_ENV=production ELECTRON=true next build && node scripts/copy-standalone.mjs",
+    "build:electron": "npm run prepare-app-data && npm run build && electron-builder",
+    "prepare-icons": "node scripts/prepare-icons.mjs",
+    "stage:package": "node scripts/stage-packaging.mjs",
+    "build:win": "npm run prepare-app-data && npm run prepare-icons && npm run build && npm run stage:package && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win",
+    "package:win": "npm run build:win",
+    "start": "cross-env NODE_ENV=production electron .",
+    "lint": "next lint",
+    "postinstall": "prisma generate && electron-builder install-app-deps",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:studio": "prisma studio",
+    "db:clean:local": "node scripts/clean-local-db.mjs --yes",
+    "db:clean:cloud": "node scripts/clean-cloud-db.mjs --yes"
+  },
+  "dependencies": {
+    "@hookform/resolvers": "^5.0.1",
+    "@prisma/client": "^6.8.2",
+    "@radix-ui/react-slot": "^1.2.3",
+    "bcryptjs": "^3.0.3",
+    "better-sqlite3": "^11.10.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "framer-motion": "^12.12.1",
+    "jose": "^6.2.3",
+    "lucide-react": "^0.511.0",
+    "mongoose": "^9.6.2",
+    "next": "^15.3.2",
+    "pg": "^8.21.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-hook-form": "^7.56.4",
+    "tailwind-merge": "^3.3.0",
+    "ws": "^8.20.1",
+    "zod": "^3.25.28",
+    "zustand": "^5.0.5"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3.3.1",
+    "@tailwindcss/postcss": "^4.1.7",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^22.15.21",
+    "@types/pg": "^8.20.0",
+    "@types/react": "^19.1.4",
+    "@types/react-dom": "^19.1.5",
+    "concurrently": "^9.1.2",
+    "cross-env": "^7.0.3",
+    "electron": "^36.3.1",
+    "electron-builder": "^26.0.12",
+    "eslint": "^9.27.0",
+    "eslint-config-next": "^15.3.2",
+    "png-to-ico": "^2.1.8",
+    "prisma": "^6.8.2",
+    "selfsigned": "^2.4.1",
+    "tailwindcss": "^4.1.7",
+    "tsx": "^4.22.3",
+    "tw-animate-css": "^1.3.0",
+    "typescript": "^5.8.3",
+    "wait-on": "^8.0.3"
+  },
+  "build": {
+    "appId": "com.pos.desktop",
+    "productName": "POS Desktop",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "afterPack": "./scripts/after-pack.cjs",
+    "files": [
+      "dist-electron/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "build/icon.png",
+        "to": "icon.png"
+      },
+      {
+        "from": "build-data/cloud.env",
+        "to": "data/cloud.env"
+      },
+      {
+        "from": "packaging/data",
+        "to": "data",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "packaging/standalone",
+        "to": "standalone",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "win": {
+      "icon": "build/icon.png",
+      "signAndEditExecutable": false,
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "installerLanguages": [
+        "en_US"
+      ],
+      "language": "1033"
+    },
+    "asar": true,
+    "asarUnpack": [
+      "**/node_modules/better-sqlite3/**/*",
+      "**/node_modules/@prisma/client/**/*",
+      "**/.prisma/**/*"
+    ]
+  }
+}

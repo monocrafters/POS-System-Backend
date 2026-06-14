@@ -1,0 +1,162 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  CASHIER
+}
+
+enum BillStatus {
+  COMPLETED
+  CANCELLED
+}
+
+model User {
+  id        String   @id @default(cuid())
+  username  String   @unique
+  password  String
+  fullName  String
+  role      Role
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  bills     Bill[]
+  returns   Return[]
+}
+
+model Product {
+  id           String           @id @default(cuid())
+  name         String
+  price        Float
+  purchaseCost Float            @default(0)
+  stock        Int              @default(0)
+  isActive     Boolean          @default(true)
+  barcodes  ProductBarcode[]
+  billItems BillItem[]
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+}
+
+model ProductBarcode {
+  id        String   @id @default(cuid())
+  barcode   String   @unique
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
+
+model Bill {
+  id             String     @id @default(cuid())
+  billNumber     String     @unique
+  cashierId      String
+  cashier        User       @relation(fields: [cashierId], references: [id])
+  subtotal       Float
+  discountAmount Float      @default(0)
+  total          Float
+  itemCount      Int
+  status         BillStatus @default(COMPLETED)
+  items          BillItem[]
+  returns        Return[]
+  createdAt      DateTime   @default(now())
+}
+
+model BillItem {
+  id           String       @id @default(cuid())
+  billId       String
+  bill         Bill         @relation(fields: [billId], references: [id], onDelete: Cascade)
+  productId    String
+  product      Product      @relation(fields: [productId], references: [id])
+  barcode      String
+  name         String
+  unitPrice    Float
+  unitCost     Float        @default(0)
+  quantity     Int
+  lineDiscount Float        @default(0)
+  lineTotal    Float
+  returnItems  ReturnItem[]
+}
+
+model Return {
+  id            String       @id @default(cuid())
+  returnNumber  String       @unique
+  billId        String
+  bill          Bill         @relation(fields: [billId], references: [id])
+  cashierId     String
+  cashier       User         @relation(fields: [cashierId], references: [id])
+  refundAmount  Float
+  refundPercent Float
+  itemCount     Int
+  items         ReturnItem[]
+  createdAt     DateTime     @default(now())
+}
+
+model ReturnItem {
+  id         String   @id @default(cuid())
+  returnId   String
+  return     Return   @relation(fields: [returnId], references: [id], onDelete: Cascade)
+  billItemId String
+  billItem   BillItem @relation(fields: [billItemId], references: [id])
+  productId  String
+  name       String
+  barcode    String
+  unitPrice  Float
+  quantity   Int
+  lineRefund Float
+}
+
+model ShopSettings {
+  id                  String   @id @default("global")
+  shopName            String   @default("Bata POS")
+  shopTagline         String   @default("Retail Store")
+  returnsEnabled      Boolean  @default(true)
+  returnRefundPercent Float    @default(100)
+  receiptPhone        String?
+  updatedAt           DateTime @updatedAt
+}
+
+model RecurringExpense {
+  id               String    @id @default(cuid())
+  title            String
+  amount           Float
+  category         String
+  customCategory   String?
+  payFrequency     String
+  nextDueDate      DateTime
+  remindDaysBefore Int       @default(3)
+  note             String?
+  isActive         Boolean   @default(true)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  payments         Expense[]
+}
+
+model Expense {
+  id                 String            @id @default(cuid())
+  title              String
+  amount             Float
+  category           String
+  customCategory     String?
+  note               String?
+  expenseDate        DateTime          @default(now())
+  recurringExpenseId String?
+  recurringExpense   RecurringExpense? @relation(fields: [recurringExpenseId], references: [id], onDelete: SetNull)
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+}
+
+model SyncMeta {
+  id            String    @id @default("global")
+  lastPullAt    DateTime?
+  lastPushAt    DateTime?
+  lastSyncAt    DateTime?
+  lastStatus    String    @default("idle")
+  lastError     String?
+  recordsPulled Int       @default(0)
+  recordsPushed Int       @default(0)
+}
