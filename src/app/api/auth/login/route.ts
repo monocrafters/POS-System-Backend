@@ -4,6 +4,10 @@ import { signAuthToken } from "@/lib/auth/jwt";
 import { loginSchema } from "@/lib/validations/auth";
 import { jsonError, jsonOk } from "@/lib/api-response";
 import { ensureDatabaseReady } from "@/lib/bootstrap-db";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 export async function POST(request: Request) {
     try {
         await ensureDatabaseReady();
