@@ -1,11 +1,13 @@
 import { getAdminAnalytics } from "@/lib/analytics/admin-analytics";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { jsonError, jsonOk } from "@/lib/api-response";
+import { ensureDatabaseReady } from "@/lib/bootstrap-db";
 export async function GET(request: Request) {
     const admin = await requireAdmin(request);
     if (!admin)
         return jsonError("Unauthorized", 401);
     try {
+        await ensureDatabaseReady();
         const analytics = await getAdminAnalytics();
         return jsonOk({ success: true, analytics });
     }

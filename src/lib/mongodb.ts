@@ -76,6 +76,65 @@ export interface MongoHealthResult {
     latencyMs: number | null;
     connectionMode?: string;
 }
+export async function checkMongoHealthQuick(): Promise<MongoHealthResult> {
+    const shopId = getConfiguredShopId();
+    if (!isMongoConfigured()) {
+        return {
+            configured: false,
+            connected: false,
+            message: "MongoDB not configured",
+            database: null,
+            shopId,
+            latencyMs: null,
+        };
+    }
+    const start = Date.now();
+    try {
+        if (globalForMongo.mongooseConn?.connection?.readyState === 1) {
+            await globalForMongo.mongooseConn.connection.db?.admin().ping();
+            return {
+                configured: true,
+                connected: true,
+                message: "MongoDB connected",
+                database: globalForMongo.mongooseConn.connection.db?.databaseName ?? null,
+                shopId,
+                latencyMs: Date.now() - start,
+            };
+        }
+        const conn = await connectMongo();
+        if (!conn) {
+            return {
+                configured: true,
+                connected: false,
+                message: "Could not connect to MongoDB",
+                database: null,
+                shopId,
+                latencyMs: Date.now() - start,
+            };
+        }
+        await conn.connection.db?.admin().ping();
+        return {
+            configured: true,
+            connected: true,
+            message: "MongoDB connected",
+            database: conn.connection.db?.databaseName ?? null,
+            shopId,
+            latencyMs: Date.now() - start,
+        };
+    }
+    catch (error) {
+        const message = error instanceof Error ? error.message : "MongoDB connection failed";
+        return {
+            configured: true,
+            connected: false,
+            message,
+            database: null,
+            shopId,
+            latencyMs: Date.now() - start,
+        };
+    }
+}
+
 export async function checkMongoHealth(): Promise<MongoHealthResult> {
     const shopId = getConfiguredShopId();
     if (!isMongoConfigured()) {

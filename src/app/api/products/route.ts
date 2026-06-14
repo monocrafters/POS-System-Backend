@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { productSchema } from "@/lib/validations/product";
 import { jsonError, jsonOk } from "@/lib/api-response";
+import { ensureDatabaseReady } from "@/lib/bootstrap-db";
 
 function triggerCloudBackup() {
     import("@/lib/sync/sync-service")
@@ -16,6 +17,7 @@ export async function GET(request: Request) {
     if (!admin)
         return jsonError("Unauthorized", 401);
     try {
+        await ensureDatabaseReady();
         const products = await prisma.product.findMany({
             where: { isActive: true },
             include: productInclude,
@@ -33,6 +35,7 @@ export async function POST(request: Request) {
     if (!admin)
         return jsonError("Unauthorized", 401);
     try {
+        await ensureDatabaseReady();
         const body = await request.json();
         const parsed = productSchema.safeParse(body);
         if (!parsed.success) {
@@ -67,8 +70,8 @@ export async function POST(request: Request) {
     catch (error) {
         console.error("[products POST]", error);
         const msg = error instanceof Error ? error.message : "Failed to create product";
-        if (msg.includes("Unknown argument") || msg.includes("purchaseCost")) {
-            return jsonError("Database out of date. Stop the app, run `npm run db:push`, then restart.", 500);
+        if (msg.includes("Unknown argument") || msg.includes("purchaseCost") || msg.includes("schema")) {
+            return jsonError("Database schema is updating. Please refresh the page in a few seconds.", 500);
         }
         if (msg.includes("Unique constraint")) {
             return jsonError("Barcode already exists on another product", 409);

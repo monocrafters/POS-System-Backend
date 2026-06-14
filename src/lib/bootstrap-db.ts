@@ -6,6 +6,7 @@ import { isMongoConfigured } from "@/lib/mongodb";
 import { runInitialPullFromMongo } from "@/lib/sync/sync-service";
 
 let bootstrapPromise: Promise<void> | null = null;
+let mongoPullPromise: Promise<void> | null = null;
 
 function isVercelRuntime(): boolean {
     return Boolean(process.env.VERCEL);
@@ -23,16 +24,38 @@ function getTemplateDbCandidates(): string[] {
     ];
 }
 
-async function hasShopSettingsTable(): Promise<boolean> {
+async function hasColumn(table: string, column: string): Promise<boolean> {
     try {
         const rows = (await prisma.$queryRawUnsafe(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='ShopSettings' LIMIT 1;",
+            `SELECT name FROM pragma_table_info('${table}') WHERE name='${column}' LIMIT 1;`,
         )) as Array<{ name: string }>;
         return rows.length > 0;
     }
     catch {
         return false;
     }
+}
+
+async function hasTable(table: string): Promise<boolean> {
+    try {
+        const rows = (await prisma.$queryRawUnsafe(
+            `SELECT name FROM sqlite_master WHERE type='table' AND name='${table}' LIMIT 1;`,
+        )) as Array<{ name: string }>;
+        return rows.length > 0;
+    }
+    catch {
+        return false;
+    }
+}
+
+async function isSchemaCurrent(): Promise<boolean> {
+    const checks = await Promise.all([
+        hasTable("ShopSettings"),
+        hasTable("SyncMeta"),
+        hasColumn("Product", "purchaseCost"),
+        hasColumn("BillItem", "unitCost"),
+    ]);
+    return checks.every(Boolean);
 }
 
 async function pushSqliteSchema(): Promise<void> {
@@ -50,14 +73,15 @@ async function pushSqliteSchema(): Promise<void> {
     }
 }
 
-async function ensureSqliteSchema(): Promise<void> {
-    if (await hasShopSettingsTable()) {
+export async function ensureSqliteSchema(): Promise<void> {
+    if (await isSchemaCurrent()) {
         return;
     }
-    if (!isVercelRuntime() && process.env.NODE_ENV === "production") {
-        throw new Error("Database schema is missing on production runtime.");
-    }
+    console.log("[bootstrap-db] Schema out of date — running prisma db push");
     await pushSqliteSchema();
+    if (!(await isSchemaCurrent())) {
+        throw new Error("Database schema could not be updated. Run `npm run db:push` and restart.");
+    }
 }
 
 async function ensureVercelDatabaseFile(): Promise<void> {
@@ -114,7 +138,25 @@ async function seedDefaultUsers(): Promise<void> {
     }
 }
 
+/** Pull latest MongoDB backup into SQLite — never blocks login/API responses. */
+export function pullMongoBackupInBackground(): void {
+    if (!isMongoConfigured()) return;
+    if (mongoPullPromise) return;
+    mongoPullPromise = (async () => {
+        try {
+            await runInitialPullFromMongo();
+        }
+        catch (error) {
+            console.warn("[bootstrap-db] Mongo backup pull skipped:", error);
+        }
+    })().finally(() => {
+        mongoPullPromise = null;
+    });
+}
+
 export async function ensureDatabaseReady(): Promise<void> {
+    await ensureSqliteSchema();
+
     if (!bootstrapPromise) {
         bootstrapPromise = (async () => {
             if (isVercelRuntime()) {
@@ -126,18 +168,6 @@ export async function ensureDatabaseReady(): Promise<void> {
                 where: { product: { isActive: false } },
             });
 
-            // MongoDB is for optional admin backup sync on desktop — never block Vercel login.
-            const meta = await prisma.syncMeta.findUnique({ where: { id: "global" } });
-            const isFirstRun = !meta?.lastPullAt;
-            if (isFirstRun && isMongoConfigured() && !isVercelRuntime()) {
-                try {
-                    await runInitialPullFromMongo();
-                }
-                catch (error) {
-                    console.warn("[bootstrap-db] Mongo backup pull skipped:", error);
-                }
-            }
-
             const userCount = await prisma.user.count();
             if (userCount === 0) {
                 await seedDefaultUsers();
@@ -147,5 +177,7 @@ export async function ensureDatabaseReady(): Promise<void> {
             throw err;
         });
     }
+
     await bootstrapPromise;
+    pullMongoBackupInBackground();
 }
