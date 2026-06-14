@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 export async function GET() {
-    const bootstrapError = (globalThis as any).bootstrapError;
-    if (bootstrapError) {
-        return NextResponse.json({ ok: false, error: bootstrapError }, { status: 200 });
-    }
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({
+        ok: true,
+        service: "pos-backend",
+        runtime: "nodejs",
+        vercel: Boolean(process.env.VERCEL),
+    });
 }
 
 export async function HEAD() {
