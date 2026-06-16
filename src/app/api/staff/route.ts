@@ -3,6 +3,8 @@ import { hashPassword } from "@/lib/auth/password";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { cashierRegisterSchema } from "@/lib/validations/staff";
 import { jsonError, jsonOk } from "@/lib/api-response";
+import { triggerCloudBackup } from "@/lib/sync/trigger-cloud-backup";
+
 function staffSelect() {
     return {
         id: true,
@@ -63,9 +65,7 @@ export async function POST(request: Request) {
             },
             select: staffSelect(),
         });
-        import("@/lib/sync/sync-service")
-            .then(({ runFullSync }) => runFullSync())
-            .catch(console.error);
+        triggerCloudBackup();
         return jsonOk({
             success: true,
             message: "Cashier registered successfully",

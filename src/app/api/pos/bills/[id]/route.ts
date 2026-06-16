@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth/require-auth";
 import { jsonError, jsonOk } from "@/lib/api-response";
+import { triggerCloudBackup } from "@/lib/sync/trigger-cloud-backup";
 type RouteCtx = {
     params: Promise<{
         id: string;
@@ -57,6 +58,7 @@ export async function DELETE(request: Request, ctx: RouteCtx) {
             }
             await tx.bill.delete({ where: { id } });
         });
+        triggerCloudBackup();
         return jsonOk({ success: true, message: "Bill deleted" });
     }
     catch (error) {

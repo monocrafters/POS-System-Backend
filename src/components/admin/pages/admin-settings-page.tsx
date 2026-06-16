@@ -1,13 +1,13 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
-import { Loader2, Save, CheckCircle2, AlertCircle, Eye, EyeOff, Cloud, Download, Trash2, Database, User, Store, RotateCcw, } from "lucide-react";
+import { Loader2, Save, CheckCircle2, AlertCircle, Eye, EyeOff, Cloud, Download, User, Store, RotateCcw, } from "lucide-react";
 import { CollapsibleSection } from "@/components/ui/collapsible-section";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Skeleton, SkeletonReceiptPreview, SkeletonSettingsRows, } from "@/components/ui/skeleton";
 import { useAuthStore } from "@/store/auth-store";
-import { apiAdminGetAccount, apiAdminGetShopSettings, apiAdminUpdateAccount, apiAdminUpdateShopSettings, apiGetSyncStatus, apiRunSync, apiGetCloudConfig, apiSaveCloudConfig, apiRemoveCloudConfig, apiPullFromCloud, type ShopSettings, type SyncStatusResponse, type CloudConfigView, } from "@/lib/api-client";
+import { apiAdminGetAccount, apiAdminGetShopSettings, apiAdminUpdateAccount, apiAdminUpdateShopSettings, apiGetSyncStatus, apiRunSync, apiGetCloudConfig, apiPullFromCloud, type ShopSettings, type SyncStatusResponse, type CloudConfigView, } from "@/lib/api-client";
 import { cacheShopSettings, readShopSettingsCache, } from "@/lib/admin-settings-cache";
 import { invalidateShopSettingsCache } from "@/hooks/use-shop-settings";
 import { ThermalReceipt } from "@/components/cashier/thermal-receipt";
@@ -47,11 +47,7 @@ export function AdminSettingsPage() {
     const [syncLoading, setSyncLoading] = useState(false);
     const [syncError, setSyncError] = useState<string | null>(null);
     const [cloudConfig, setCloudConfig] = useState<CloudConfigView | null>(null);
-    const [mongoUriInput, setMongoUriInput] = useState("");
-    const [shopIdInput, setShopIdInput] = useState("bata-store-01");
     const [openSection, setOpenSection] = useState<OpenSection>(null);
-    const [cloudSaving, setCloudSaving] = useState(false);
-    const [cloudRemoving, setCloudRemoving] = useState(false);
     const [fetchLoading, setFetchLoading] = useState(false);
     const [cloudMessage, setCloudMessage] = useState<string | null>(null);
     const [accountUsername, setAccountUsername] = useState("");
@@ -81,10 +77,6 @@ export function AdminSettingsPage() {
             }
             if (cloudRes?.success) {
                 setCloudConfig(cloudRes.config);
-                setShopIdInput(cloudRes.config.shopId);
-                if (!cloudRes.config.configured) {
-                    setMongoUriInput("");
-                }
             }
             setError(null);
         }
@@ -136,60 +128,8 @@ export function AdminSettingsPage() {
             setSyncLoading(false);
         }
     };
-    const saveCloud = async () => {
-        if (!mongoUriInput.trim()) {
-            setSyncError("Paste your MongoDB Atlas connection string first.");
-            return;
-        }
-        setCloudSaving(true);
-        setSyncError(null);
-        setCloudMessage(null);
-        try {
-            const res = await apiSaveCloudConfig(token, {
-                mongodbUri: mongoUriInput.trim(),
-                shopId: shopIdInput.trim() || undefined,
-                syncEnabled: true,
-            });
-            setCloudConfig(res.config);
-            setMongoUriInput("");
-            setCloudMessage(res.config.connected
-                ? "MongoDB connected — uploading local data to cloud…"
-                : `Saved, but connection failed: ${res.config.connectionMessage ?? "check URI"}`);
-            if (res.config.connected) {
-                await apiRunSync(token).catch(() => null);
-                setCloudMessage("MongoDB connected — local data backed up to cloud.");
-            }
-            await refreshSyncStatus();
-        }
-        catch (err) {
-            setSyncError(err instanceof Error ? err.message : "Failed to save cloud database");
-        }
-        finally {
-            setCloudSaving(false);
-        }
-    };
-    const removeCloud = async () => {
-        if (!confirm("Remove cloud database from this PC? Local data stays on this machine."))
-            return;
-        setCloudRemoving(true);
-        setSyncError(null);
-        setCloudMessage(null);
-        try {
-            const res = await apiRemoveCloudConfig(token);
-            setCloudConfig(res.config);
-            setMongoUriInput("");
-            setCloudMessage(res.message);
-            await refreshSyncStatus();
-        }
-        catch (err) {
-            setSyncError(err instanceof Error ? err.message : "Failed to remove cloud database");
-        }
-        finally {
-            setCloudRemoving(false);
-        }
-    };
     const fetchFromCloud = async () => {
-        if (!confirm("Fetch latest backup from cloud into this PC? This replaces local data with the cloud snapshot."))
+        if (!confirm("Fetch latest data from Supabase into this PC? This replaces local data with cloud tables."))
             return;
         setFetchLoading(true);
         setSyncError(null);
@@ -346,53 +286,26 @@ export function AdminSettingsPage() {
           </CollapsibleSection>
 
           <CollapsibleSection
-            title="Cloud backup (MongoDB)"
-            icon={Database}
+            title="Cloud sync (Supabase)"
+            icon={Cloud}
             open={openSection === "cloud"}
             onToggle={() => toggleSection("cloud")}>
             <p className="mb-4 text-xs text-neutral-500">
-              MongoDB Atlas cloud backup. Mobile app uses the same config from this PC.
+              Local SQLite syncs to Supabase PostgreSQL tables when online (auto every 30s and after changes).
             </p>
             <div className="space-y-4 rounded-lg border border-neutral-200 bg-neutral-50/60 p-4 text-sm">
-              {cloudConfig?.configured ? (<div className="space-y-1 text-xs text-neutral-600">
-                  <p><span className="font-semibold text-neutral-800">Connected:</span> {cloudConfig.connected ? "Yes" : "No"}</p>
-                  <p><span className="font-semibold text-neutral-800">URI:</span> {cloudConfig.mongodbUriMasked}</p>
-                  <p><span className="font-semibold text-neutral-800">Shop ID:</span> {cloudConfig.shopId}</p>
-                  {cloudConfig.database && (<p><span className="font-semibold text-neutral-800">Database:</span> {cloudConfig.database}</p>)}
-                  {!cloudConfig.connected && cloudConfig.connectionMessage && (<p className="text-red-600">{cloudConfig.connectionMessage}</p>)}
-                </div>) : (<p className="text-xs text-neutral-500">No cloud database yet. Paste MongoDB URI below.</p>)}
-
-              <div>
-                <Label htmlFor="mongo-uri" className="text-xs font-medium">MongoDB connection string</Label>
-                <Input
-                  id="mongo-uri"
-                  value={mongoUriInput}
-                  onChange={(e) => setMongoUriInput(e.target.value)}
-                  placeholder="mongodb+srv://user:pass@cluster.mongodb.net/bata-pos?appName=Cluster0"
-                  className="mt-1.5 font-mono text-xs"
-                  autoComplete="off"
-                />
-              </div>
-              <div>
-                <Label htmlFor="shop-id" className="text-xs font-medium">Shop ID</Label>
-                <Input id="shop-id" value={shopIdInput} onChange={(e) => setShopIdInput(e.target.value)} placeholder="bata-store-01" className="mt-1.5 max-w-xs text-sm"/>
-                <p className="mt-1 text-[10px] text-neutral-500">Same ID on all PCs and mobile for one shop&apos;s backups.</p>
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                <Button type="button" size="sm" disabled={cloudSaving} onClick={() => void saveCloud()} className="h-8 gap-1.5 bg-[#E31837] hover:bg-red-700">
-                  {cloudSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin"/> : <Cloud className="h-3.5 w-3.5"/>}
-                  {cloudConfig?.configured ? "Update connection" : "Add MongoDB"}
-                </Button>
-                {cloudConfig?.configured && (<Button type="button" size="sm" variant="outline" disabled={cloudRemoving} onClick={() => void removeCloud()} className="h-8 gap-1.5 text-red-600">
-                    {cloudRemoving ? <Loader2 className="h-3.5 w-3.5 animate-spin"/> : <Trash2 className="h-3.5 w-3.5"/>}
-                    Remove cloud DB
-                  </Button>)}
+              <div className="space-y-1 text-xs text-neutral-600">
+                <p><span className="font-semibold text-neutral-800">Cloud:</span> {cloudConfig?.configured ? (cloudConfig.connected ? "Connected" : "Not connected") : "Not configured on server"}</p>
+                {cloudConfig?.shopId && (<p><span className="font-semibold text-neutral-800">Shop ID:</span> {cloudConfig.shopId}</p>)}
+                {!cloudConfig?.connected && cloudConfig?.connectionMessage && (<p className="text-red-600">{cloudConfig.connectionMessage}</p>)}
               </div>
 
               {syncStatus && cloudConfig?.configured && (<div className="space-y-2 border-t border-neutral-200 pt-3 text-xs text-neutral-600">
-                  <p><span className="font-semibold text-neutral-800">Last backup:</span> {syncStatus.lastSyncAt ? new Date(syncStatus.lastSyncAt).toLocaleString() : "Never"}</p>
+                  <p><span className="font-semibold text-neutral-800">Last sync:</span> {syncStatus.lastSyncAt ? new Date(syncStatus.lastSyncAt).toLocaleString() : "Never"}</p>
                   <p><span className="font-semibold text-neutral-800">Pending:</span> {syncStatus.pendingRecords ?? 0} / {syncStatus.totalRecords ?? 0}</p>
+                  {syncStatus.cloudRecords != null && (
+                    <p><span className="font-semibold text-neutral-800">Cloud rows:</span> {syncStatus.cloudRecords}</p>
+                  )}
                   <div className="h-1.5 w-full overflow-hidden rounded-full bg-neutral-200">
                     <div className="h-full rounded-full bg-[#E31837]" style={{ width: `${syncStatus.percentBackedUp ?? 0}%` }}/>
                   </div>
@@ -404,11 +317,11 @@ export function AdminSettingsPage() {
               <div className="flex flex-wrap gap-2 border-t border-neutral-200 pt-3">
                 <Button type="button" size="sm" variant="outline" disabled={syncLoading || !cloudConfig?.configured} onClick={() => void runBackup()} className="h-8 gap-1.5">
                   {syncLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin"/> : <Cloud className="h-3.5 w-3.5"/>}
-                  Push backup to cloud
+                  Push to cloud
                 </Button>
                 <Button type="button" size="sm" variant="outline" disabled={fetchLoading || !cloudConfig?.configured} onClick={() => void fetchFromCloud()} className="h-8 gap-1.5">
                   {fetchLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin"/> : <Download className="h-3.5 w-3.5"/>}
-                  Fetch from cloud
+                  Pull from cloud
                 </Button>
                 <button type="button" onClick={() => void refreshSyncStatus({ showError: true })} className="text-[11px] font-medium text-neutral-500 underline-offset-2 hover:underline">
                   Refresh status

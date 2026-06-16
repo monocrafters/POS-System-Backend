@@ -3,12 +3,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { productSchema } from "@/lib/validations/product";
 import { jsonError, jsonOk } from "@/lib/api-response";
 import { ensureDatabaseReady } from "@/lib/bootstrap-db";
-
-function triggerCloudBackup() {
-    import("@/lib/sync/sync-service")
-        .then(({ runFullSync }) => runFullSync())
-        .catch((err) => console.error("[products cloud-backup]", err));
-}
+import { triggerCloudBackup } from "@/lib/sync/trigger-cloud-backup";
 const productInclude = {
     barcodes: { orderBy: { createdAt: "asc" as const } },
 };

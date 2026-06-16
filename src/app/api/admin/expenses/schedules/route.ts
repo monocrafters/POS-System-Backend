@@ -2,6 +2,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { jsonError, jsonOk } from "@/lib/api-response";
 import { createRecurringExpense } from "@/lib/admin-expenses";
 import { recurringExpenseSchema } from "@/lib/validations/expense";
+import { triggerCloudBackup } from "@/lib/sync/trigger-cloud-backup";
 export async function POST(request: Request) {
     const admin = await requireAdmin(request);
     if (!admin)
@@ -13,6 +14,7 @@ export async function POST(request: Request) {
             return jsonError(parsed.error.errors[0]?.message ?? "Invalid input", 400);
         }
         const schedule = await createRecurringExpense(parsed.data);
+        triggerCloudBackup();
         return jsonOk({ success: true, schedule }, 201);
     }
     catch (error) {

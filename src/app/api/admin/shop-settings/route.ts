@@ -2,6 +2,7 @@ import { getShopSettings, updateShopSettings } from "@/lib/shop-settings";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { jsonError, jsonOk } from "@/lib/api-response";
 import { shopSettingsSchema } from "@/lib/validations/shop";
+import { triggerCloudBackup } from "@/lib/sync/trigger-cloud-backup";
 export async function GET(request: Request) {
     const admin = await requireAdmin(request);
     if (!admin)
@@ -20,6 +21,7 @@ export async function PATCH(request: Request) {
             return jsonError(parsed.error.errors[0]?.message ?? "Invalid input", 400);
         }
         const settings = await updateShopSettings(parsed.data);
+        triggerCloudBackup();
         return jsonOk({ success: true, settings });
     }
     catch (error) {

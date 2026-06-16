@@ -20,6 +20,9 @@
     "stage:package": "node scripts/stage-packaging.mjs",
     "build:win": "npm run prepare-app-data && npm run prepare-icons && npm run build && npm run stage:package && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win",
     "package:win": "npm run build:win",
+    "build:mobile:apk": "cd mobile-admin && npm run build:apk",
+    "dev:mobile": "npm run start --prefix mobile-admin",
+    "mobile": "npm run start --prefix mobile-admin",
     "start": "cross-env NODE_ENV=production electron .",
     "lint": "next lint",
     "postinstall": "prisma generate",
@@ -28,7 +31,9 @@
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
     "db:clean:local": "node scripts/clean-local-db.mjs --yes",
-    "db:clean:cloud": "node scripts/clean-cloud-db.mjs --yes"
+    "db:clean:cloud": "node scripts/clean-cloud-db.mjs --yes",
+    "db:fresh-start": "node scripts/fresh-start.mjs --yes",
+    "db:configure-cloud": "node scripts/configure-supabase.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.0.1",
@@ -41,7 +46,6 @@
     "framer-motion": "^12.12.1",
     "jose": "^6.2.3",
     "lucide-react": "^0.511.0",
-    "mongoose": "^9.6.2",
     "next": "^15.3.2",
     "pg": "^8.21.0",
     "react": "^19.1.0",

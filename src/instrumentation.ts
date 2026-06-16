@@ -1,13 +1,4 @@
 export async function register() {
-    if (process.env.NEXT_RUNTIME !== "nodejs") {
-        return;
-    }
-    try {
-        const { ensureDatabaseReady } = await import("@/lib/bootstrap-db");
-        await ensureDatabaseReady();
-    }
-    catch (error) {
-        console.error("[instrumentation] database bootstrap failed:", error);
-    }
+    // Database bootstrap runs from /api/health (Node route) so Electron dev can wait on it
+    // without pulling Node-only modules into the instrumentation bundle.
 }
-

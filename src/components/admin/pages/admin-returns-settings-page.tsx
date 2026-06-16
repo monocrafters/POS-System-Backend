@@ -1,9 +1,9 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
-import { RotateCcw, Loader2, Settings } from "lucide-react";
+import { RotateCcw, Loader2, Settings, Trash2 } from "lucide-react";
 import { SkeletonRows } from "@/components/ui/skeleton";
 import { useAuthStore } from "@/store/auth-store";
-import { apiFetchReturns, type ReturnRecord } from "@/lib/api-client";
+import { apiFetchReturns, apiDeleteReturn, type ReturnRecord } from "@/lib/api-client";
 import { formatMoney, formatReceiptDate } from "@/lib/receipt";
 import type { AdminSectionId } from "../admin-nav";
 interface AdminReturnsPageProps {
@@ -13,6 +13,7 @@ export function AdminReturnsSettingsPage({ onNavigate, }: AdminReturnsPageProps)
     const token = useAuthStore((s) => s.token);
     const [returns, setReturns] = useState<ReturnRecord[]>([]);
     const [loading, setLoading] = useState(true);
+    const [deletingId, setDeletingId] = useState<string | null>(null);
     const loadReturns = useCallback(async () => {
         setLoading(true);
         try {
@@ -26,6 +27,20 @@ export function AdminReturnsSettingsPage({ onNavigate, }: AdminReturnsPageProps)
             setLoading(false);
         }
     }, [token]);
+    const deleteReturn = async (r: ReturnRecord) => {
+        if (!confirm(`Delete ${r.returnNumber}? Stock will be reduced.`)) return;
+        setDeletingId(r.id);
+        try {
+            await apiDeleteReturn(token, r.id);
+            await loadReturns();
+        }
+        catch (e) {
+            alert(e instanceof Error ? e.message : "Delete failed");
+        }
+        finally {
+            setDeletingId(null);
+        }
+    };
     useEffect(() => {
         void loadReturns();
     }, [loadReturns]);
@@ -58,6 +73,7 @@ export function AdminReturnsSettingsPage({ onNavigate, }: AdminReturnsPageProps)
                   <th className="px-5 py-3 lg:px-8">Bill</th>
                   <th className="px-5 py-3 lg:px-8">Cashier</th>
                   <th className="px-5 py-3 text-right lg:px-8">Refund</th>
+                  <th className="px-5 py-3 text-right lg:px-8"> </th>
                 </tr>
               </thead>
               <tbody>
@@ -78,6 +94,16 @@ export function AdminReturnsSettingsPage({ onNavigate, }: AdminReturnsPageProps)
                     </td>
                     <td className="px-5 py-3 text-right font-semibold tabular-nums text-green-700 lg:px-8">
                       {formatMoney(r.refundAmount)}
+                    </td>
+                    <td className="px-5 py-3 text-right lg:px-8">
+                      <button
+                        type="button"
+                        disabled={deletingId === r.id}
+                        onClick={() => void deleteReturn(r)}
+                        className="rounded-lg p-2 text-neutral-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+                        aria-label="Delete return">
+                        <Trash2 className="h-4 w-4"/>
+                      </button>
                     </td>
                   </tr>))}
               </tbody>

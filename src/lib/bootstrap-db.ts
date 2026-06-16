@@ -62,7 +62,7 @@ async function pushSqliteSchema(): Promise<void> {
         cwd: process.cwd(),
         env: process.env,
         stdio: "pipe",
-        shell: false,
+        shell: process.platform === "win32",
     });
     if (res.status !== 0) {
         const detail = res.stderr?.toString() || res.stdout?.toString() || "unknown error";
@@ -158,6 +158,16 @@ export async function ensureDatabaseReady(): Promise<void> {
             const userCount = await prisma.user.count();
             if (userCount === 0) {
                 await seedDefaultUsers();
+            }
+
+            if (isVercelRuntime() && process.env.POSTGRES_URI?.trim()) {
+                try {
+                    const { runInitialPullFromCloud } = await import("@/lib/sync/sync-service");
+                    await runInitialPullFromCloud();
+                }
+                catch (err) {
+                    console.error("[bootstrap-db] Cloud pull on Vercel failed:", err);
+                }
             }
         })().catch((err) => {
             bootstrapPromise = null;

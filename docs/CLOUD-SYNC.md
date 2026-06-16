@@ -1,96 +1,71 @@
-# Bata POS — Cloud Backup (MongoDB)
+# POS Cloud Sync — Supabase (PostgreSQL)
 
-Local data (SQLite) automatically syncs with **MongoDB** when the internet is available.
+Desktop and mobile share **one cloud database** automatically. Users do **not** add any database in the app.
 
 ## How it works
 
-1. **App start / internet restored** → Pull from MongoDB → local SQLite (new PC gets all users/data).
-2. **After local changes** → Push from SQLite → MongoDB (cloud backup stays updated).
-3. Repeats every **30 seconds** while online, and when Electron detects network.
+| Device | Local storage | Online |
+|--------|---------------|--------|
+| **Desktop** | SQLite (offline POS works) | Auto-push to Supabase **relational tables** every 30s + after every change |
+| **Mobile** | Cached products (offline view) | Reads from Vercel API → Supabase cloud |
+| **Vercel API** | Temp SQLite (hydrated from Supabase on start) | Same data as desktop |
 
-## Setup
+- **Delete** on desktop → cloud row removed → deleted items do not come back
+- **Offline** on desktop → data saved locally → sync when internet returns
+- **Mobile** → tap **Sync now** in Settings to load latest desktop data
 
-### 1. MongoDB (local or Atlas)
+## Supabase tables (same structure as local Prisma)
 
-**Local:**
-```bash
-# Install MongoDB Community, then:
-mongod
+| Table | Contents |
+|-------|----------|
+| `pos_users` | Admin / cashier accounts |
+| `pos_products` | Products |
+| `pos_product_barcodes` | Barcodes |
+| `pos_bills` / `pos_bill_items` | Sales |
+| `pos_returns` / `pos_return_items` | Returns |
+| `pos_shop_settings` | Shop name, returns policy |
+| `pos_recurring_expenses` / `pos_expenses` | Expenses |
+
+View in Supabase → **Table Editor** (not JSON).
+
+---
+
+## Step 1 — Create free Supabase database
+
+1. Go to https://supabase.com → Sign up (free)
+2. **New project** → set a strong **database password** → region closest to you
+3. Wait ~2 minutes for project to be ready
+
+---
+
+## Step 2 — Configure connection (Windows / IPv4)
+
+Direct URI (`db.xxx.supabase.co`) is IPv6-only. Use the configure script — it auto-finds the Session pooler:
+
+```powershell
+node scripts/configure-supabase.mjs "postgresql://postgres:YOUR_PASSWORD@db.xxxxx.supabase.co:5432/postgres"
 ```
 
-**Atlas:** Create cluster → Connect → copy connection string.
+Or paste the **Session pooler** URI from Supabase → Connect → Session mode.
 
-### 2. `.env`
+---
 
-```env
-MONGODB_URI="mongodb://127.0.0.1:27017/bata-pos"
-# or mongodb+srv://user:pass@cluster.mongodb.net/bata-pos
-SHOP_ID="bata-store-01"
-SYNC_ENABLED="true"
-```
+## Step 3 — Configure Vercel (for mobile app)
 
-Use the same `SHOP_ID` on every PC in the same store.
+| Name | Value |
+|------|--------|
+| `POSTGRES_URI` | Same Supabase URI as desktop |
+| `SHOP_ID` | `bata-store-01` |
+| `SYNC_ENABLED` | `true` |
+| `JWT_SECRET` | Same as desktop |
 
-### 3. Apply database schema
+Then **Redeploy**.
 
-```bash
-npm run db:push
-```
+---
 
-### 4. Run app
+## Test
 
-```bash
-npm run dev
-```
-
-Register users via Postman on one machine → open app on another machine with empty DB → sync pulls users automatically.
-
-## API (check in browser or Postman)
-
-| Method | URL | Description |
-|--------|-----|-------------|
-| GET | `http://localhost:3000/api/mongo/health` | **MongoDB connected?** (ping test) |
-| GET | `http://localhost:3000/api/sync/status` | Mongo + last sync details |
-| POST | `http://localhost:3000/api/sync/run` | Run pull + push now |
-
-**MongoDB working example:**
-```json
-{
-  "success": true,
-  "configured": true,
-  "connected": true,
-  "message": "MongoDB is connected and responding",
-  "database": "bata-pos",
-  "shopId": "bata-store-01",
-  "latencyMs": 12
-}
-```
-
-**Not working:** `"connected": false` and `message` will show the error.
-
-### Fix: `querySrv ECONNREFUSED` (Windows / DNS)
-
-Atlas `mongodb+srv://` needs DNS SRV. If that fails, use **standard URI** in `.env`:
-
-```env
-MONGODB_URI="mongodb://USER:PASS@cluster0.weqdqgo.mongodb.net:27017/bata-pos?retryWrites=true&w=majority&tls=true"
-```
-
-Also in **MongoDB Atlas → Network Access → Add IP Address → Allow Access from Anywhere** (`0.0.0.0/0`).
-
-Restart app after changing `.env`.
-
-## New system checklist
-
-1. Install Bata POS on new PC.
-2. Set same `MONGODB_URI` and `SHOP_ID` in `.env`.
-3. Connect internet → open app → wait for “Synced” in header.
-4. Login with existing staff credentials.
-
-## Disable sync
-
-```env
-SYNC_ENABLED="false"
-```
-
-Or remove `MONGODB_URI`.
+- Desktop: Settings → Cloud sync → **Connected**
+- Supabase: Table Editor → `pos_products`
+- Browser: `http://localhost:3000/api/cloud/health`
+- Mobile: Settings → **Sync now**

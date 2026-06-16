@@ -18,5 +18,6 @@ export interface SyncStatusResponse {
     totalRecords: number;
     pendingRecords: number;
     percentBackedUp: number;
+    cloudRecords?: number;
 }
 

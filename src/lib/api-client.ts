@@ -353,7 +353,8 @@ export async function apiCreateProduct(token: string | null, body: {
 }
 export interface CloudConfigView {
     configured: boolean;
-    mongodbUriMasked: string | null;
+    provider?: string;
+    postgresUriMasked?: string | null;
     shopId: string;
     syncEnabled: boolean;
     connected: boolean;
@@ -763,6 +764,7 @@ export interface SyncStatusResponse {
     totalRecords: number;
     pendingRecords: number;
     percentBackedUp: number;
+    cloudRecords?: number;
 }
 export async function apiGetSyncStatus(token: string | null): Promise<{
     success: true;
@@ -1167,6 +1169,21 @@ export async function apiFetchReturns(token: string | null, limit = 40): Promise
         success: true;
         returns: ReturnRecord[];
     }>(data);
+}
+
+export async function apiDeleteReturn(token: string | null, id: string): Promise<{
+    success: true;
+    message: string;
+}> {
+    const res = await fetch(`/api/pos/returns/${id}`, {
+        method: "DELETE",
+        headers: authHeaders(token),
+    });
+    const data = await parseJsonResponse<ApiError & Record<string, unknown>>(res);
+    if (!res.ok) {
+        throw new Error((data as ApiError).message ?? "Failed to delete return");
+    }
+    return okBody<{ success: true; message: string }>(data);
 }
 export async function apiSearch(token: string | null, query: string): Promise<SearchResponse> {
     const q = encodeURIComponent(query.trim().toLowerCase());

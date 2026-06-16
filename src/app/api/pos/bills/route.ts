@@ -4,6 +4,7 @@ import { createBillSchema } from "@/lib/validations/bill";
 import { generateBillNumber } from "@/lib/bills/bill-number";
 import { periodStart, type BillPeriod } from "@/lib/bills/date-range";
 import { jsonError, jsonOk } from "@/lib/api-response";
+import { triggerCloudBackup } from "@/lib/sync/trigger-cloud-backup";
 const billInclude = {
     items: { orderBy: { id: "asc" as const } },
     cashier: {
@@ -156,6 +157,7 @@ export async function POST(request: Request) {
                 include: billInclude,
             });
         });
+        triggerCloudBackup();
         return jsonOk({ success: true, bill }, 201);
     }
     catch (error) {

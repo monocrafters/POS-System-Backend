@@ -151,15 +151,15 @@ function loadProductionEnv(): Record<string, string> {
     if (!fs.existsSync(envFile)) {
         const jwt = crypto.randomBytes(32).toString("hex");
         const dbUrl = `file:${dbPath.replace(/\\/g, "/")}`;
-        const mongoUri = cloudEnv.MONGODB_URI?.trim();
+        const postgresUri = cloudEnv.POSTGRES_URI?.trim();
         const lines = [
             `DATABASE_URL="${dbUrl}"`,
             `JWT_SECRET="${jwt}"`,
-            `SHOP_ID="${cloudEnv.SHOP_ID?.trim() || "store-01"}"`,
-            `SYNC_ENABLED="${mongoUri ? "true" : "false"}"`,
+            `SHOP_ID="${cloudEnv.SHOP_ID?.trim() || "bata-store-01"}"`,
+            `SYNC_ENABLED="${postgresUri ? "true" : "false"}"`,
         ];
-        if (mongoUri) {
-            lines.push(`MONGODB_URI="${mongoUri}"`);
+        if (postgresUri) {
+            lines.push(`POSTGRES_URI="${postgresUri}"`);
         }
         fs.writeFileSync(envFile, lines.join("\n"), "utf8");
     }
@@ -173,10 +173,7 @@ function loadProductionEnv(): Record<string, string> {
     if (!parsed.SHOP_ID && cloudEnv.SHOP_ID) {
         parsed.SHOP_ID = cloudEnv.SHOP_ID;
     }
-    if (!parsed.MONGODB_URI && cloudEnv.MONGODB_URI) {
-        parsed.MONGODB_URI = cloudEnv.MONGODB_URI;
-        parsed.SYNC_ENABLED = "true";
-    }
+    // Only use bundled cloud.env when creating a new install — do not override user .env on every launch.
     return parsed;
 }
 function startProductionServer(): Promise<string> {

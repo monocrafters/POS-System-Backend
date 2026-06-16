@@ -24,39 +24,8 @@ function loadEnv() {
     }
 }
 
-function hasYesFlag() {
-    return process.argv.includes("--yes") || process.argv.includes("-y");
-}
-
 loadEnv();
 const uri = process.env.POSTGRES_URI?.trim();
-const shopId = (process.env.SHOP_ID?.trim() || "bata-store-01").trim();
-
-const CLOUD_TABLES = [
-    "pos_return_items",
-    "pos_returns",
-    "pos_bill_items",
-    "pos_bills",
-    "pos_product_barcodes",
-    "pos_products",
-    "pos_expenses",
-    "pos_recurring_expenses",
-    "pos_shop_settings",
-    "pos_users",
-];
-
-if (!hasYesFlag()) {
-    console.log([
-        "Deletes Supabase cloud data for this shop (relational pos_* tables).",
-        "",
-        `SHOP_ID: ${shopId}`,
-        "",
-        "Run: node scripts/clean-cloud-db.mjs --yes",
-        "Requires POSTGRES_URI in .env",
-    ].join("\n"));
-    process.exit(1);
-}
-
 if (!uri) {
     console.error("Missing POSTGRES_URI in .env");
     process.exit(1);
@@ -65,19 +34,16 @@ if (!uri) {
 const pool = new Pool({
     connectionString: uri,
     ssl: { rejectUnauthorized: false },
+    connectionTimeoutMillis: 15000,
 });
 
 try {
-    let removed = 0;
-    for (const table of CLOUD_TABLES) {
-        const res = await pool.query(`DELETE FROM ${table} WHERE shop_id = $1`, [shopId]);
-        removed += res.rowCount ?? 0;
-    }
-    console.log(`Cloud clean done for shop ${shopId} (rows removed: ${removed})`);
+    await pool.query("SELECT 1");
+    console.log("Supabase PostgreSQL: connected OK");
     await pool.end();
 }
 catch (e) {
-    console.error("Cloud clean failed:", e?.message ?? e);
+    console.error("Supabase connection failed:", e?.message ?? e);
     await pool.end().catch(() => { });
     process.exit(1);
 }

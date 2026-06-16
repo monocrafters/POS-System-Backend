@@ -2,6 +2,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { jsonError, jsonOk } from "@/lib/api-response";
 import { deleteRecurringExpense, updateRecurringExpense, } from "@/lib/admin-expenses";
 import { recurringExpenseSchema } from "@/lib/validations/expense";
+import { triggerCloudBackup } from "@/lib/sync/trigger-cloud-backup";
 type Params = {
     params: Promise<{
         id: string;
@@ -19,6 +20,7 @@ export async function PATCH(request: Request, { params }: Params) {
             return jsonError(parsed.error.errors[0]?.message ?? "Invalid input", 400);
         }
         const schedule = await updateRecurringExpense(id, parsed.data);
+        triggerCloudBackup();
         return jsonOk({ success: true, schedule });
     }
     catch (error) {
@@ -33,6 +35,7 @@ export async function DELETE(request: Request, { params }: Params) {
     const { id } = await params;
     try {
         await deleteRecurringExpense(id);
+        triggerCloudBackup();
         return jsonOk({ success: true });
     }
     catch (error) {

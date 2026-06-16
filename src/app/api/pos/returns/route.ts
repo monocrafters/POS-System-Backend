@@ -6,6 +6,7 @@ import { getReturnableQty } from "@/lib/returns/bill-returnable";
 import { getEffectiveUnitPrice, getLineRefundAmount } from "@/lib/returns/refund-pricing";
 import { getReturnSettings } from "@/lib/shop-settings";
 import { jsonError, jsonOk } from "@/lib/api-response";
+import { triggerCloudBackup } from "@/lib/sync/trigger-cloud-backup";
 const returnInclude = {
     items: { orderBy: { id: "asc" as const } },
     bill: { select: { billNumber: true } },
@@ -110,6 +111,7 @@ export async function POST(request: Request) {
                 include: returnInclude,
             });
         });
+        triggerCloudBackup();
         return jsonOk({ success: true, return: created }, 201);
     }
     catch (error) {

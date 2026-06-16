@@ -1,6 +1,7 @@
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { jsonError, jsonOk } from "@/lib/api-response";
 import { markRecurringPaid } from "@/lib/admin-expenses";
+import { triggerCloudBackup } from "@/lib/sync/trigger-cloud-backup";
 type Params = {
     params: Promise<{
         id: string;
@@ -21,6 +22,7 @@ export async function POST(request: Request, { params }: Params) {
                     : undefined,
             expenseDate: body.expenseDate,
         });
+        triggerCloudBackup();
         return jsonOk({ success: true, ...result });
     }
     catch (error) {

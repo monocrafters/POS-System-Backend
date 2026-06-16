@@ -2,6 +2,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { jsonError, jsonOk } from "@/lib/api-response";
 import { createExpense, listAdminExpenses, type ExpensePeriod, } from "@/lib/admin-expenses";
 import { expenseSchema } from "@/lib/validations/expense";
+import { triggerCloudBackup } from "@/lib/sync/trigger-cloud-backup";
 const PERIODS = new Set<ExpensePeriod>(["day", "week", "month", "year", "all"]);
 export async function GET(request: Request) {
     const admin = await requireAdmin(request);
@@ -32,6 +33,7 @@ export async function POST(request: Request) {
             return jsonError(parsed.error.errors[0]?.message ?? "Invalid input", 400);
         }
         const result = await createExpense(parsed.data);
+        triggerCloudBackup();
         return jsonOk({ success: true, ...result }, 201);
     }
     catch (error) {
