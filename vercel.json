@@ -12,6 +12,7 @@
           "key": "Access-Control-Allow-Headers",
           "value": "Content-Type, Authorization, Accept, Origin, X-Requested-With, Access-Control-Request-Method, Access-Control-Request-Headers"
         },
+        { "key": "Access-Control-Expose-Headers", "value": "Content-Type, Authorization" },
         { "key": "Access-Control-Max-Age", "value": "86400" }
       ]
     }

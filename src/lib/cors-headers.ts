@@ -25,6 +25,7 @@ export function buildCorsHeaders(request?: NextRequest | { headers: Headers } | 
         "Access-Control-Allow-Origin": origin || "*",
         "Access-Control-Allow-Methods": CORS_ALLOW_METHODS,
         "Access-Control-Allow-Headers": CORS_ALLOW_HEADERS,
+        "Access-Control-Expose-Headers": "Content-Type, Authorization",
         "Access-Control-Max-Age": "86400",
         ...(origin ? { "Vary": "Origin" } : {}),
     };
@@ -35,5 +36,6 @@ export const CORS_HEADERS: Record<string, string> = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": CORS_ALLOW_METHODS,
     "Access-Control-Allow-Headers": CORS_ALLOW_HEADERS,
+    "Access-Control-Expose-Headers": "Content-Type, Authorization",
     "Access-Control-Max-Age": "86400",
 };
